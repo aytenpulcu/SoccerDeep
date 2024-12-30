@@ -58,8 +58,8 @@ def process_video(video_path, annotations, target_labels, total_frames=5000, fra
 
     # Etiketlerin bulunduğu zaman dilimlerinden rastgele 5000 frame seçme
     for ann in annotations:
-        if ann['label'] in target_labels:
-            time = game_time_to_frame(ann['gameTime'], frame_rate)
+        if ann.label  in target_labels:
+            time = game_time_to_frame(ann.gameTime, frame_rate)
             selected_frame_times.append(time)
 
     # Seçilen frame'lerin sayısını sınırlama
@@ -77,9 +77,9 @@ def process_video(video_path, annotations, target_labels, total_frames=5000, fra
             frames.append(cv2.resize(frame, (224, 224)))  # 224x224 boyut
             # Olay var mı kontrol et
             for ann in annotations:
-                time = game_time_to_frame(ann['gameTime'], frame_rate)
+                time = game_time_to_frame(ann.gameTime, frame_rate)
                 if current_frame == time:  # Zaman eşleştirme
-                    labels.append(ann['label'])
+                    labels.append(ann.label)
                     break
         
         current_frame += 1
@@ -126,15 +126,17 @@ train = load_annotations("C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/
 test = load_annotations("C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/test/2019-10-01 - Reading - Fulham/Labels-ball.json")
 valid = load_annotations("C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/valid/2019-10-01 - Middlesbrough - Preston North End/Labels-ball.json")
 #%%
-target_labels = ["GOAL","PASS"]
-train_frames, train_labels = process_video(Train_video_path, train.annotations,target_labels)
+
+train_frames, train_labels = process_video(Train_video_path, train.annotations,labels)
 
 # Etiketleri encode yap
 trainEn_labels = encode_labels(train_labels, labels)
-
-test_frames, test_labels = process_video(Test_video_path, test.annotations)
-valid_frames, valid_labels = process_video(Valid_video_path, valid.annotations)
+#%%
+test_frames, test_labels = process_video(Test_video_path, test.annotations,labels)
 testEn_labels = encode_labels(test_labels, labels)
+#%%
+valid_frames, valid_labels = process_video(Valid_video_path, valid.annotations,labels)
+
 validEn_labels = encode_labels(valid_labels, labels)
 
 #%%
@@ -313,17 +315,41 @@ plt.show()
 
 #%%
 
-# Eğitim veya test sırasında kullanılan frame'leri dosyaya yazma
-used_frames = []  # Kullanılan frame'leri buraya ekleyin (örneğin, frame index veya frame dosya isimleri)
 
-# Eğitim sırasında kullanılan frame'ler
-for i in range(len(X_train)):
-    used_frames.append(f"Frame {i}: {X_train[i]}")  # Burada X_train[i] yerine frame indeksini veya adını yazabilirsiniz.
+# Örnek veri setleri ve etiketler
+x_train = np.random.rand(250, 224, 224, 3)  # Eğitim seti
+y_train = np.random.randint(0, 10, 250)  # Eğitim etiketleri (10 sınıf)
 
-# Frame'leri dosyaya yazma
-with open('used_frames.txt', 'w') as file:
-    for frame in used_frames:
-        file.write(f"{frame}\n")
+x_valid = np.random.rand(50, 224, 224, 3)   # Doğrulama seti
+y_valid = np.random.randint(0, 10, 50)  # Doğrulama etiketleri (10 sınıf)
+
+x_test = np.random.rand(100, 224, 224, 3)   # Test seti
+y_test = np.random.randint(0, 10, 100)  # Test etiketleri (10 sınıf)
+
+# Veri seti boyutları
+train_samples = x_train.shape[0]
+valid_samples = x_valid.shape[0]
+test_samples = x_test.shape[0]
+height = x_train.shape[1]  # Tüm setler aynı boyutta olduğu için x_train kullanılabilir
+width = x_train.shape[2]
+channels = x_train.shape[3]
+
+# Etiket boyutları
+train_labels = y_train.shape[0]
+valid_labels = y_valid.shape[0]
+test_labels = y_test.shape[0]
+
+# Boyutları bir txt dosyasına yazdırma
+with open("dataset_dimensions.txt", "w") as f:
+    f.write(f"Training set - Number of samples: {train_samples}, Labels: {train_labels}\n")
+    f.write(f"Validation set - Number of samples: {valid_samples}, Labels: {valid_labels}\n")
+    f.write(f"Test set - Number of samples: {test_samples}, Labels: {test_labels}\n")
+    f.write(f"Height: {height}\n")
+    f.write(f"Width: {width}\n")
+    f.write(f"Channels: {channels}\n")
+
+print("Dataset dimensions have been written to 'dataset_dimensions.txt'")
+
 
 #%%
 
