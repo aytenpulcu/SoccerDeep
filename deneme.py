@@ -96,7 +96,7 @@ def game_time_to_frame(gameTime: str, frame_rate: int = 25) -> int:
 
 #%%
 # Video karelerini çıkar ve etiketlerle eşleştir
-def process_video(video_path, annotations, frame_rate=):
+def process_video(video_path, annotations, frame_rate=25):
     cap = cv2.VideoCapture(video_path)
     frames = []
     labels = []
@@ -118,7 +118,8 @@ def process_video(video_path, annotations, frame_rate=):
             labels.append("NO_ACTION")  # Olay olmayan kareler
 
         current_frame += 1
-    
+        if current_frame== 250:
+            break
     cap.release()
     return np.array(frames), np.array(labels)
 #%%
@@ -159,17 +160,18 @@ test = load_annotations("C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/t
 valid = load_annotations("C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/valid/2019-10-01 - Middlesbrough - Preston North End/Labels-ball.json")
 #%%
 train_frames, train_labels = process_video(Train_video_path, train.annotations)
-test_frames, test_labels = process_video(Test_video_path, test.annotations)
-valid_frames, valid_labels = process_video(Valid_video_path, valid.annotations)
 
 # Etiketleri encode yap
 trainEn_labels = encode_labels(train_labels, labels)
+
+test_frames, test_labels = process_video(Test_video_path, test.annotations)
+valid_frames, valid_labels = process_video(Valid_video_path, valid.annotations)
 testEn_labels = encode_labels(test_labels, labels)
 validEn_labels = encode_labels(valid_labels, labels)
 
 #%%
 # Basit veri şekillendirme
-X_train = train_frames/255  # İlk 100 kare eğitim
+X_train = train_frames/255  #
 y_train =trainEn_labels
 
 X_test = test_frames/255
@@ -179,23 +181,76 @@ X_valid = valid_frames/255
 y_valid= validEn_labels
 #%%
 
-X_train[:5]
+num_images =2
+images = X_train[:num_images]
+
+# Görselleri bir döngüde çiz
+fig, axes = plt.subplots(1, num_images, figsize=(20,20))
+#%%
+print("X_train shape:", X_train.shape)
+print("Image 1 min-max:", X_train[0].min(), X_train[0].max())
+
+#%%
+# Rastgele 5 görüntü seç
+num_images = 5
+random_indices = np.random.choice(X_train.shape[0], num_images, replace=False)  # Rastgele benzersiz indeksler
+random_images = X_train[random_indices]
+fig, axes = plt.subplots(1, num_images, figsize=(15, 5))
+for i, ax in enumerate(axes):
+    image = random_images[i]
+    
+    # Şekil kontrolü: Grayscale mi RGB mi?
+    if image.ndim == 2 or image.shape[-1] == 1:
+        ax.imshow(image.squeeze(), cmap='gray')  # Grayscale
+    else:
+        ax.imshow(image)  # RGB
+    
+    ax.axis('off')
+    ax.set_title(f"Image {i+1}")
+
+plt.tight_layout()
+plt.show()
 
 #%%
 
-y_train[:5]
+
+# Modelin tanımlanması
+model = models.Sequential([
+    # İlk Conv2D katmanı
+    layers.Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)),
+    layers.MaxPooling2D((2, 2)),
+
+    # İkinci Conv2D katmanı
+    layers.Conv2D(64, (3, 3), activation='relu'),
+    layers.MaxPooling2D((2, 2)),
+
+    # Üçüncü Conv2D katmanı
+    layers.Conv2D(128, (3, 3), activation='relu'),
+    layers.MaxPooling2D((2, 2)),
+
+    # Düzleştirme (Flatten) katmanı
+    layers.Flatten(),
+
+    # Tam bağlı (Dense) katman
+    layers.Dense(128, activation='relu'),
+    layers.Dropout(0.5),  # Overfitting'i önlemek için dropout katmanı
+
+    # Çıkış katmanı (örneğin, 10 sınıf için softmax)
+    layers.Dense(10, activation='softmax')  # Bu kısmı ihtiyaca göre değiştirebilirsiniz (sınıf sayısı)
+])
+
+# Modeli derleme
+model.compile(optimizer='adam', 
+              loss='categorical_crossentropy', 
+              metrics=['accuracy'])
+
+# Modelin özeti
+model.summary()
 
 #%%
-
-model = build_model((224, 224, 3, 1), 12)  # 12 sınıflı model
-history = model.fit(
-    X_train, y_train,
-    validation_data=(X_valid, y_valid),
-    epochs=10,
-    batch_size=16
-)
+# Modeli eğitme
+history = model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_valid,y_valid))
 #%%
-
 # Kayıp grafiği
 plt.plot(history.history['loss'], label='Training Loss')
 plt.plot(history.history['val_loss'], label='Validation Loss')
