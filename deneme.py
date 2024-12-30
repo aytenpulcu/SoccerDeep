@@ -6,51 +6,12 @@ from tensorflow.keras import layers, models
 import json
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
+import random
+from dataModel import Root,Annotation,labels
 #%%
-from typing import List
-from typing import Any
-from dataclasses import dataclass
-
-@dataclass
-class Annotation:
-    gameTime: str
-    label: str
-    position: str
-    team: str
-    visibility: str
-
-    @staticmethod
-    def from_dict(obj: Any) -> 'Annotation':
-        _gameTime = str(obj.get("gameTime"))
-        _label = str(obj.get("label"))
-        _position = str(obj.get("position"))
-        _team = str(obj.get("team"))
-        _visibility = str(obj.get("visibility"))
-        return Annotation(_gameTime, _label, _position, _team, _visibility)
-
-@dataclass
-class Root:
-    UrlLocal: str
-    UrlYoutube: str
-    annotations: List[Annotation]
-
-    @staticmethod
-    def from_dict(obj: Any) -> 'Root':
-        _UrlLocal = str(obj.get("UrlLocal"))
-        _UrlYoutube = str(obj.get("UrlYoutube"))
-        _annotations = [Annotation.from_dict(y) for y in obj.get("annotations")]
-        return Root(_UrlLocal, _UrlYoutube, _annotations)
 
 
 #%%
-
-# Ana sınıflar
-labels = [
-    "PASS", "DRIVE", "HEADER", "HIGH PASS", "OUT", "CROSS", 
-    "THROW IN", "SHOT", "BALL PLAYER BLOCK", "PLAYER SUCCESSFUL TACKLE", 
-    "FREE KICK", "GOAL", "NO_ACTION"
-]
-
 
 # JSON etiketlerini yükle
 def load_annotations(json_path):
@@ -64,16 +25,6 @@ def load_annotations(json_path):
         return None
 #%%
 def game_time_to_frame(gameTime: str, frame_rate: int = 25) -> int:
-    """
-    Converts gameTime string (e.g., "1 - 97:12") to a frame number.
-    
-    Args:
-        gameTime (str): The game time in "1 - MM:SS" format.
-        frame_rate (int): Frame rate of the video (default is 25 fps).
-    
-    Returns:
-        int: Corresponding frame number.
-    """
     try:
         # Periyot numarasını ve dakika:saniye kısmını ayır
         period, time = gameTime.split(" - ")
@@ -95,33 +46,49 @@ def game_time_to_frame(gameTime: str, frame_rate: int = 25) -> int:
 # print(f"GameTime '{game_time}' corresponds to frame: {current_frame}")
 
 #%%
-# Video karelerini çıkar ve etiketlerle eşleştir
-def process_video(video_path, annotations, frame_rate=25):
+def process_video(video_path, annotations, target_labels, total_frames=5000, frame_rate=25):
     cap = cv2.VideoCapture(video_path)
     frames = []
     labels = []
     current_frame = 0
+    video_length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))  # Video uzunluğu (toplam frame sayısı)
     
+    # Önemli etiketlerin gameTime bilgilerini topla
+    selected_frame_times = []
+
+    # Etiketlerin bulunduğu zaman dilimlerinden rastgele 5000 frame seçme
+    for ann in annotations:
+        if ann['label'] in target_labels:
+            time = game_time_to_frame(ann['gameTime'], frame_rate)
+            selected_frame_times.append(time)
+
+    # Seçilen frame'lerin sayısını sınırlama
+    selected_frame_times = random.sample(selected_frame_times, min(len(selected_frame_times), total_frames))
+    
+    # Video karelerini ve etiketlerini işle
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Videoyu baştan başlat
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
-        # Kareyi kaydet
-        frames.append(cv2.resize(frame, (224, 224)))  # 224x224 boyut
-        # Olay var mı kontrol et
-        for ann in annotations:
-            time=game_time_to_frame(ann.gameTime, frame_rate)
-            if current_frame == time:  # Zaman eşleştirme
-                labels.append(ann.label)
-                break
-        else:
-            labels.append("NO_ACTION")  # Olay olmayan kareler
 
+        # Eğer bu frame seçilmişse, kareyi ve etiketini kaydet
+        if current_frame in selected_frame_times:
+            frames.append(cv2.resize(frame, (224, 224)))  # 224x224 boyut
+            # Olay var mı kontrol et
+            for ann in annotations:
+                time = game_time_to_frame(ann['gameTime'], frame_rate)
+                if current_frame == time:  # Zaman eşleştirme
+                    labels.append(ann['label'])
+                    break
+        
         current_frame += 1
-        if current_frame== 250:
+        if current_frame >= video_length:
             break
+
     cap.release()
     return np.array(frames), np.array(labels)
+
 #%%
 # Etiketleri one-hot encode yap
 def encode_labels(labels, classes):
@@ -159,7 +126,8 @@ train = load_annotations("C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/
 test = load_annotations("C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/test/2019-10-01 - Reading - Fulham/Labels-ball.json")
 valid = load_annotations("C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/valid/2019-10-01 - Middlesbrough - Preston North End/Labels-ball.json")
 #%%
-train_frames, train_labels = process_video(Train_video_path, train.annotations)
+target_labels = ["GOAL","PASS"]
+train_frames, train_labels = process_video(Train_video_path, train.annotations,target_labels)
 
 # Etiketleri encode yap
 trainEn_labels = encode_labels(train_labels, labels)
@@ -180,15 +148,29 @@ y_test= testEn_labels
 X_valid = valid_frames/255
 y_valid= validEn_labels
 #%%
+print("X_train shape:", X_train.shape)
+print("Image 1 min-max:", X_train[0].min(), X_train[0].max())
 
+#%%
 num_images =2
 images = X_train[:num_images]
 
 # Görselleri bir döngüde çiz
 fig, axes = plt.subplots(1, num_images, figsize=(20,20))
-#%%
-print("X_train shape:", X_train.shape)
-print("Image 1 min-max:", X_train[0].min(), X_train[0].max())
+for i, ax in enumerate(axes):
+    image = images[i]
+    
+    # Şekil kontrolü: Grayscale mi RGB mi?
+    if image.ndim == 2 or image.shape[-1] == 1:
+        ax.imshow(image.squeeze(), cmap='gray')  # Grayscale
+    else:
+        ax.imshow(image)  # RGB
+    
+    ax.axis('off')
+    ax.set_title(f"Image {i+1}")
+
+plt.tight_layout()
+plt.show()
 
 #%%
 # Rastgele 5 görüntü seç
@@ -236,7 +218,8 @@ model = models.Sequential([
     layers.Dropout(0.5),  # Overfitting'i önlemek için dropout katmanı
 
     # Çıkış katmanı (örneğin, 10 sınıf için softmax)
-    layers.Dense(10, activation='softmax')  # Bu kısmı ihtiyaca göre değiştirebilirsiniz (sınıf sayısı)
+    layers.Dense(13, activation='softmax')
+    # Bu kısmı ihtiyaca göre değiştirebilirsiniz (sınıf sayısı)
 ])
 
 # Modeli derleme
@@ -246,10 +229,26 @@ model.compile(optimizer='adam',
 
 # Modelin özeti
 model.summary()
+#%%
+# Modelin yapısını dosyaya yazma
+# Modeli JSON formatında kaydetme (mimari)
+model_json = model.to_json()
+with open("model_architecture.json", "w") as json_file:
+    json_file.write(model_json)
+
 
 #%%
 # Modeli eğitme
 history = model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_valid,y_valid))
+#%%
+# Dosya yazma işlemi
+with open('training_results.txt', 'w') as file:
+    file.write("Epoch\tTraining Loss\tTraining Accuracy\tValidation Loss\tValidation Accuracy\n")
+    
+    # Eğitim sonuçlarını yazma
+    for epoch in range(len(history.history['loss'])):
+        file.write(f"{epoch+1}\t{history.history['loss'][epoch]}\t{history.history['accuracy'][epoch]}\t"
+                   f"{history.history['val_loss'][epoch]}\t{history.history['val_accuracy'][epoch]}\n")
 #%%
 # Kayıp grafiği
 plt.plot(history.history['loss'], label='Training Loss')
@@ -260,6 +259,20 @@ plt.legend()
 plt.title('Loss During Training and Validation')
 plt.show()
 #%%
+# Modeli test verisi üzerinde değerlendirme
+test_loss, test_accuracy = model.evaluate(X_test, y_test, batch_size=32)
+print(f"Test Loss: {test_loss}")
+print(f"Test Accuracy: {test_accuracy}")
+#%%
+# Test sonucu değerlendirmesi
+test_loss, test_accuracy = model.evaluate(X_test, y_test, batch_size=32)
+
+# Test sonuçlarını dosyaya yazma
+with open('test_results.txt', 'w') as file:
+    file.write(f"Test Loss: {test_loss}\n")
+    file.write(f"Test Accuracy: {test_accuracy}\n")
+
+#%%
 # Doğruluk grafiği
 plt.plot(history.history['accuracy'], label='Training Accuracy')
 plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
@@ -268,4 +281,53 @@ plt.ylabel('Accuracy')
 plt.legend()
 plt.title('Accuracy During Training and Validation')
 plt.show()
+
+#%%
+# Test verisi üzerinde tahminler yapmak
+y_pred = model.predict(X_test, batch_size=32)
+
+# Tahminlerin ilk 5'ini yazdırma (y_pred'nin her bir elemanı [0, 1, 2, ..., 12] gibi etiketler olabilir)
+print("Predictions for the first 5 samples:")
+print(np.argmax(y_pred[:5], axis=1))  # One-hot encoded ise argmax ile sınıfı alırız
+
+
+#%%
+
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+
+# Gerçek etiketler ve tahmin edilen etiketler
+y_true = np.argmax(y_test, axis=1)  # One-hot encoded ise argmax ile etiketleri alıyoruz
+y_pred_classes = np.argmax(y_pred, axis=1)  # Tahmin edilen sınıflar
+
+# Confusion Matrix hesaplama
+cm = confusion_matrix(y_true, y_pred_classes)
+
+# Confusion Matrix görselleştirme
+plt.figure(figsize=(10, 8))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=np.arange(13), yticklabels=np.arange(13))
+plt.xlabel('Predicted')
+plt.ylabel('True')
+plt.title('Confusion Matrix')
+plt.show()
+
+#%%
+
+# Eğitim veya test sırasında kullanılan frame'leri dosyaya yazma
+used_frames = []  # Kullanılan frame'leri buraya ekleyin (örneğin, frame index veya frame dosya isimleri)
+
+# Eğitim sırasında kullanılan frame'ler
+for i in range(len(X_train)):
+    used_frames.append(f"Frame {i}: {X_train[i]}")  # Burada X_train[i] yerine frame indeksini veya adını yazabilirsiniz.
+
+# Frame'leri dosyaya yazma
+with open('used_frames.txt', 'w') as file:
+    for frame in used_frames:
+        file.write(f"{frame}\n")
+
+#%%
+
+#%%
+
+#%%
 
