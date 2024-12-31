@@ -46,7 +46,7 @@ def game_time_to_frame(gameTime: str, frame_rate: int = 25) -> int:
 # print(f"GameTime '{game_time}' corresponds to frame: {current_frame}")
 
 #%%
-def process_video(video_path, annotations, target_labels, total_frames=5000, frame_rate=25):
+def process_video(video_path, annotations, target_labels, total_frames=50000, frame_rate=25):
     cap = cv2.VideoCapture(video_path)
     frames = []
     labels = []
@@ -118,16 +118,32 @@ def build_model(input_shape, num_classes):
 
 # Veri yükleme ve model eğitimi
 
-Train_video_path = "C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/train/2019-10-01 - Blackburn Rovers - Nottingham Forest/224p.mp4" 
+Train_video_path = "C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/train/"
+videos=["2019-10-01 - Blackburn Rovers - Nottingham Forest" ,"2019-10-01 - Brentford - Bristol City","2019-10-01 - Hull City - Sheffield Wednesday","2019-10-01 - Leeds United - West Bromwich"]
+#%%
+train =[]
+for name in videos:
+    ann=load_annotations("C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/train/"+name+"/Labels-ball.json")
+    train+=ann.annotations
+#%%
 Test_video_path = "C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/test/2019-10-01 - Reading - Fulham/224p.mp4"  
 Valid_video_path = "C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/valid/2019-10-01 - Middlesbrough - Preston North End/224p.mp4"  
 
-train = load_annotations("C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/train/2019-10-01 - Blackburn Rovers - Nottingham Forest/Labels-ball.json")
 test = load_annotations("C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/test/2019-10-01 - Reading - Fulham/Labels-ball.json")
 valid = load_annotations("C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/valid/2019-10-01 - Middlesbrough - Preston North End/Labels-ball.json")
 #%%
+Tlabels = [
+    "PASS", "DRIVE", "HEADER", "HIGH PASS", "OUT", "CROSS", 
+    "THROW IN", "SHOT", "BALL PLAYER BLOCK", "PLAYER SUCCESSFUL TACKLE", 
+    "FREE KICK", "GOAL"
+]
 
-train_frames, train_labels = process_video(Train_video_path, train.annotations,labels)
+train_frames=[]
+train_labels =[]
+for vd in videos:
+    fr,lb=process_video(Train_video_path+vd+"/224p.mp4", train,Tlabels)
+    train_frames+=fr
+    train_labels+=lb
 
 # Etiketleri encode yap
 trainEn_labels = encode_labels(train_labels, labels)
