@@ -1,0 +1,6 @@
+Training set - Number of samples: 250, Labels: 250
+Validation set - Number of samples: 50, Labels: 50
+Test set - Number of samples: 100, Labels: 100
+Height: 224
+Width: 224
+Channels: 3

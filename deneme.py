@@ -8,8 +8,6 @@ from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import random
 from dataModel import Root,Annotation,labels
-#%%
-
 
 #%%
 
@@ -117,20 +115,19 @@ def build_model(input_shape, num_classes):
 #%%
 
 # Veri yükleme ve model eğitimi
-
-Train_video_path = "C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/train/"
+Train_video_path = "/Users/ayten/Documents/SoccerNet/spotting-ball-2024/train//england_efl/2019-2020/"
 videos=["2019-10-01 - Blackburn Rovers - Nottingham Forest" ,"2019-10-01 - Brentford - Bristol City","2019-10-01 - Hull City - Sheffield Wednesday","2019-10-01 - Leeds United - West Bromwich"]
 #%%
 train =[]
 for name in videos:
-    ann=load_annotations("C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/train/"+name+"/Labels-ball.json")
+    ann=load_annotations("/Users/ayten/Documents/SoccerNet/spotting-ball-2024/train//england_efl/2019-2020/"+name+"/Labels-ball.json")
     train+=ann.annotations
 #%%
-Test_video_path = "C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/test/2019-10-01 - Reading - Fulham/224p.mp4"  
-Valid_video_path = "C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/valid/2019-10-01 - Middlesbrough - Preston North End/224p.mp4"  
+Test_video_path = "/Users/ayten/Documents/SoccerNet/spotting-ball-2024/test/england_efl/2019-2020/2019-10-01 - Reading - Fulham/224p.mp4"  
+Valid_video_path = "/Users/ayten/Documents/SoccerNet/spotting-ball-2024/valid/england_efl/2019-2020/2019-10-01 - Middlesbrough - Preston North End/224p.mp4"  
 
-test = load_annotations("C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/test/2019-10-01 - Reading - Fulham/Labels-ball.json")
-valid = load_annotations("C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/valid/2019-10-01 - Middlesbrough - Preston North End/Labels-ball.json")
+test = load_annotations("/Users/ayten/Documents/SoccerNet/spotting-ball-2024/test/england_efl/2019-2020/2019-10-01 - Reading - Fulham/Labels-ball.json")
+valid = load_annotations("/Users/ayten/Documents/SoccerNet/spotting-ball-2024/valid/england_efl/2019-2020/2019-10-01 - Middlesbrough - Preston North End/Labels-ball.json")
 #%%
 Tlabels = [
     "PASS", "DRIVE", "HEADER", "HIGH PASS", "OUT", "CROSS", 
@@ -138,15 +135,22 @@ Tlabels = [
     "FREE KICK", "GOAL"
 ]
 
-train_frames=[]
-train_labels =[]
+train_frames = np.empty((0, 224, 224, 3))
+train_labels = np.array([], dtype=str)
 for vd in videos:
     fr,lb=process_video(Train_video_path+vd+"/224p.mp4", train,Tlabels)
-    train_frames+=fr
-    train_labels+=lb
+    train_labels = np.concatenate((train_labels, lb), axis=0)
+    train_frames = np.concatenate((train_frames, fr), axis=0)
 
 # Etiketleri encode yap
 trainEn_labels = encode_labels(train_labels, labels)
+#%%
+# Benzersiz değerler ve frekanslar
+unique_values, counts = np.unique(train_labels, return_counts=True)
+
+print("Değerler:", unique_values)
+print("Frekanslar:", counts)
+
 #%%
 test_frames, test_labels = process_video(Test_video_path, test.annotations,labels)
 testEn_labels = encode_labels(test_labels, labels)
@@ -329,18 +333,19 @@ plt.ylabel('True')
 plt.title('Confusion Matrix')
 plt.show()
 
+
 #%%
 
 
 # Örnek veri setleri ve etiketler
 x_train = np.random.rand(250, 224, 224, 3)  # Eğitim seti
-y_train = np.random.randint(0, 10, 250)  # Eğitim etiketleri (10 sınıf)
+y_train = np.random.randint(0, 12, 250)  # Eğitim etiketleri (10 sınıf)
 
 x_valid = np.random.rand(50, 224, 224, 3)   # Doğrulama seti
-y_valid = np.random.randint(0, 10, 50)  # Doğrulama etiketleri (10 sınıf)
+y_valid = np.random.randint(0, 12, 50)  # Doğrulama etiketleri (10 sınıf)
 
 x_test = np.random.rand(100, 224, 224, 3)   # Test seti
-y_test = np.random.randint(0, 10, 100)  # Test etiketleri (10 sınıf)
+y_test = np.random.randint(0, 12, 100)  # Test etiketleri (10 sınıf)
 
 # Veri seti boyutları
 train_samples = x_train.shape[0]
