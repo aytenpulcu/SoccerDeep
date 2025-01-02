@@ -261,7 +261,7 @@ with open("model_architecture.json", "w") as json_file:
 
 #%%
 # Modeli eğitme
-history = model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_valid,y_valid))
+history = model.fit(X_train, y_train, epochs=20, batch_size=32, validation_data=(X_valid,y_valid))
 #%%
 # Dosya yazma işlemi
 with open('training_results.txt', 'w') as file:
