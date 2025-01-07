@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import random
 from dataModel import Root,Annotation,labels
 
+
 #%%
 
 # JSON etiketlerini yükle
@@ -54,14 +55,14 @@ def process_video(video_path, annotations, target_labels, total_frames=50000, fr
     # Önemli etiketlerin gameTime bilgilerini topla
     selected_frame_times = []
 
-    # Etiketlerin bulunduğu zaman dilimlerinden rastgele 5000 frame seçme
+    # Etiketlerin bulunduğu zaman dilimlerini seçme
     for ann in annotations:
         if ann.label  in target_labels:
             time = game_time_to_frame(ann.gameTime, frame_rate)
             selected_frame_times.append(time)
 
     # Seçilen frame'lerin sayısını sınırlama
-    selected_frame_times = random.sample(selected_frame_times, min(len(selected_frame_times), total_frames))
+    #selected_frame_times = random.sample(selected_frame_times, min(len(selected_frame_times), total_frames))
     
     # Video karelerini ve etiketlerini işle
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Videoyu baştan başlat
@@ -85,49 +86,22 @@ def process_video(video_path, annotations, target_labels, total_frames=50000, fr
             break
 
     cap.release()
+    
     return np.array(frames), np.array(labels)
 
-#%%
-# Etiketleri one-hot encode yap
-def encode_labels(labels, classes):
-    label_map = {label: idx for idx, label in enumerate(classes)}
-    encoded = np.zeros((len(labels), len(classes)))
-    for i, label in enumerate(labels):
-        encoded[i, label_map[label]] = 1
-    return encoded
 
 
 #%%
-
-# Model mimarisi
-def build_model(input_shape, num_classes):
-    model = models.Sequential([
-        layers.Conv3D(32, (3, 3, 3), activation='relu', input_shape=input_shape),
-        layers.MaxPooling3D((2, 2, 2)),
-        layers.Conv3D(64, (3, 3, 3), activation='relu'),
-        layers.MaxPooling3D((2, 2, 2)),
-        layers.Flatten(),
-        layers.Dense(128, activation='relu'),
-        layers.Dense(num_classes, activation='softmax')
-    ])
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-    return model
-#%%
-
 # Veri yükleme ve model eğitimi
 Train_video_path = "/Users/ayten/Documents/SoccerNet/spotting-ball-2024/train//england_efl/2019-2020/"
-videos=["2019-10-01 - Blackburn Rovers - Nottingham Forest" ,"2019-10-01 - Brentford - Bristol City","2019-10-01 - Hull City - Sheffield Wednesday","2019-10-01 - Leeds United - West Bromwich"]
-#%%
-train =[]
-for name in videos:
-    ann=load_annotations("/Users/ayten/Documents/SoccerNet/spotting-ball-2024/train//england_efl/2019-2020/"+name+"/Labels-ball.json")
-    train+=ann.annotations
-#%%
-Test_video_path = "/Users/ayten/Documents/SoccerNet/spotting-ball-2024/test/england_efl/2019-2020/2019-10-01 - Reading - Fulham/224p.mp4"  
-Valid_video_path = "/Users/ayten/Documents/SoccerNet/spotting-ball-2024/valid/england_efl/2019-2020/2019-10-01 - Middlesbrough - Preston North End/224p.mp4"  
+videos=["2019-10-01 - Blackburn Rovers - Nottingham Forest" ,
+        "2019-10-01 - Brentford - Bristol City",
+        "2019-10-01 - Hull City - Sheffield Wednesday",
+        "2019-10-01 - Leeds United - West Bromwich",
+        "2019-10-01 - Middlesbrough - Preston North End",
+        "2019-10-01 - Reading - Fulham",
+        "2019-10-01 - Stoke City - Huddersfield Town"]
 
-test = load_annotations("/Users/ayten/Documents/SoccerNet/spotting-ball-2024/test/england_efl/2019-2020/2019-10-01 - Reading - Fulham/Labels-ball.json")
-valid = load_annotations("/Users/ayten/Documents/SoccerNet/spotting-ball-2024/valid/england_efl/2019-2020/2019-10-01 - Middlesbrough - Preston North End/Labels-ball.json")
 #%%
 Tlabels = [
     "PASS", "DRIVE", "HEADER", "HIGH PASS", "OUT", "CROSS", 
@@ -135,71 +109,68 @@ Tlabels = [
     "FREE KICK", "GOAL"
 ]
 
-train_frames = np.empty((0, 224, 224, 3))
-train_labels = np.array([], dtype=str)
-for vd in videos:
-    fr,lb=process_video(Train_video_path+vd+"/224p.mp4", train,Tlabels)
-    train_labels = np.concatenate((train_labels, lb), axis=0)
-    train_frames = np.concatenate((train_frames, fr), axis=0)
+X= np.empty((0, 224, 224, 3))
+y = np.array([], dtype=str)
 
-# Etiketleri encode yap
-trainEn_labels = encode_labels(train_labels, labels)
+for name in videos:
+    lab=load_annotations(Train_video_path+name+"/Labels-ball.json")
+    
+    fr,lb=process_video(Train_video_path+name+"/224p.mp4", lab.annotations,Tlabels)
+    y = np.concatenate((y, lb), axis=0)
+    X = np.concatenate((X, fr), axis=0)
+#%%
+
+
 #%%
 # Benzersiz değerler ve frekanslar
-unique_values, counts = np.unique(train_labels, return_counts=True)
+unique_values, counts = np.unique(y, return_counts=True)
 
 print("Değerler:", unique_values)
 print("Frekanslar:", counts)
 
 #%%
-test_frames, test_labels = process_video(Test_video_path, test.annotations,labels)
-testEn_labels = encode_labels(test_labels, labels)
-#%%
-valid_frames, valid_labels = process_video(Valid_video_path, valid.annotations,labels)
+# Çubuk grafiği çizme
+plt.figure(figsize=(10, 6))
+plt.bar(unique_values, counts, color='skyblue', edgecolor='black')
+plt.xlabel('Benzersiz Değerler')
+plt.ylabel('Frekans')
+plt.title('Benzersiz Değerlerin Frekansı')
+plt.xticks(unique_values, rotation=45)  # Değerleri döndürmek için
+plt.grid(axis='y', linestyle='--', alpha=0.7)
 
-validEn_labels = encode_labels(valid_labels, labels)
-
-#%%
-# Basit veri şekillendirme
-X_train = train_frames/255  #
-y_train =trainEn_labels
-
-X_test = test_frames/255
-y_test= testEn_labels
-
-X_valid = valid_frames/255
-y_valid= validEn_labels
-#%%
-print("X_train shape:", X_train.shape)
-print("Image 1 min-max:", X_train[0].min(), X_train[0].max())
-
-#%%
-num_images =2
-images = X_train[:num_images]
-
-# Görselleri bir döngüde çiz
-fig, axes = plt.subplots(1, num_images, figsize=(20,20))
-for i, ax in enumerate(axes):
-    image = images[i]
-    
-    # Şekil kontrolü: Grayscale mi RGB mi?
-    if image.ndim == 2 or image.shape[-1] == 1:
-        ax.imshow(image.squeeze(), cmap='gray')  # Grayscale
-    else:
-        ax.imshow(image)  # RGB
-    
-    ax.axis('off')
-    ax.set_title(f"Image {i+1}")
-
+# Grafik gösterimi
 plt.tight_layout()
 plt.show()
 
 #%%
+from sklearn.preprocessing import LabelEncoder
+le = LabelEncoder()
+y = le.fit_transform(y)
+
+
+#%%
+# Verileri önce eğitim ve test olarak ayır
+X_train, X_test, y_train, y_test = train_test_split(X / 255, y, test_size=0.2, random_state=42)
+
+# Eğitim setini doğrulama setine de böl
+X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
+
+# Şekilleri kontrol et
+X_train.shape, y_train.shape, X_val.shape, y_val.shape, X_test.shape, y_test.shape
+
+
+
+#%%
+print("X_train shape:", X_train.shape)
+print("Image ", type(X_train[0]))
+
+#%%
 # Rastgele 5 görüntü seç
-num_images = 5
+num_images = 3
 random_indices = np.random.choice(X_train.shape[0], num_images, replace=False)  # Rastgele benzersiz indeksler
 random_images = X_train[random_indices]
-fig, axes = plt.subplots(1, num_images, figsize=(15, 5))
+random_lb= y_train[random_indices]
+fig, axes = plt.subplots(1, num_images, figsize=(20, 10))
 for i, ax in enumerate(axes):
     image = random_images[i]
     
@@ -210,61 +181,62 @@ for i, ax in enumerate(axes):
         ax.imshow(image)  # RGB
     
     ax.axis('off')
-    ax.set_title(f"Image {i+1}")
+    ax.set_title(f"Image {random_lb[i]}")
 
 plt.tight_layout()
 plt.show()
 
+
 #%%
 
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.layers import GlobalAveragePooling2D
 
-# Modelin tanımlanması
-model = models.Sequential([
-    # İlk Conv2D katmanı
-    layers.Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)),
-    layers.MaxPooling2D((2, 2)),
+# VGG16 modelini önceden eğitilmiş ağırlıklarla yükleyin
+base_model = VGG16(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
 
-    # İkinci Conv2D katmanı
-    layers.Conv2D(64, (3, 3), activation='relu'),
-    layers.MaxPooling2D((2, 2)),
+model = Sequential()
+model.add(base_model)
 
-    # Üçüncü Conv2D katmanı
-    layers.Conv2D(128, (3, 3), activation='relu'),
-    layers.MaxPooling2D((2, 2)),
+# Katmanları dondurun (transfer learning)
+base_model.trainable = False
 
-    # Düzleştirme (Flatten) katmanı
-    layers.Flatten(),
+model.add(GlobalAveragePooling2D())
+model.add(Dense(256, activation='relu'))
+model.add(Dropout(0.5))
+model.add(Dense(12, activation='softmax'))
 
-    # Tam bağlı (Dense) katman
-    layers.Dense(128, activation='relu'),
-    layers.Dropout(0.5),  # Overfitting'i önlemek için dropout katmanı
+model.compile(optimizer=Adam(), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
-    # Çıkış katmanı (örneğin, 10 sınıf için softmax)
-    layers.Dense(13, activation='softmax')
-    # Bu kısmı ihtiyaca göre değiştirebilirsiniz (sınıf sayısı)
-])
 
-# Modeli derleme
-model.compile(optimizer='adam', 
-              loss='categorical_crossentropy', 
-              metrics=['accuracy'])
 
-# Modelin özeti
-model.summary()
 #%%
 # Modelin yapısını dosyaya yazma
 # Modeli JSON formatında kaydetme (mimari)
 model_json = model.to_json()
-with open("model_architecture.json", "w") as json_file:
+with open("model_architecture2.json", "w") as json_file:
     json_file.write(model_json)
 
 
 #%%
 # Modeli eğitme
-history = model.fit(X_train, y_train, epochs=20, batch_size=32, validation_data=(X_valid,y_valid))
+from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.callbacks import ReduceLROnPlateau
+
+lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, verbose=1)
+
+
+early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+
+history = model.fit(X_train, y_train, epochs=12, batch_size=32, validation_data=(X_val, y_val), callbacks=[early_stopping,lr_scheduler])
+
+
 #%%
 # Dosya yazma işlemi
-with open('training_results.txt', 'w') as file:
+with open('training_results2.txt', 'w') as file:
     file.write("Epoch\tTraining Loss\tTraining Accuracy\tValidation Loss\tValidation Accuracy\n")
     
     # Eğitim sonuçlarını yazma
@@ -327,7 +299,7 @@ cm = confusion_matrix(y_true, y_pred_classes)
 
 # Confusion Matrix görselleştirme
 plt.figure(figsize=(10, 8))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=np.arange(13), yticklabels=np.arange(13))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=np.arange(12), yticklabels=np.arange(12))
 plt.xlabel('Predicted')
 plt.ylabel('True')
 plt.title('Confusion Matrix')
