@@ -9,8 +9,24 @@ import matplotlib.pyplot as plt
 import random
 from dataModel import Root,Annotation,labels
 
+# Veri yükleme ve model eğitimi
+Train_video_path = "/Users/ayten/Documents/SoccerNet/spotting-ball-2024/train//england_efl/2019-2020/"
+videos=["2019-10-01 - Blackburn Rovers - Nottingham Forest" ,
+        "2019-10-01 - Brentford - Bristol City"]
 
-#%%
+        # "2019-10-01 - Hull City - Sheffield Wednesday",
+        # "2019-10-01 - Leeds United - West Bromwich",
+        # "2019-10-01 - Middlesbrough - Preston North End",
+        # "2019-10-01 - Reading - Fulham",
+        # "2019-10-01 - Stoke City - Huddersfield Town"]
+
+
+Tlabels = [
+      "OUT", "CROSS", "SHOT", "BALL PLAYER BLOCK", "PLAYER SUCCESSFUL TACKLE", 
+    "FREE KICK", "GOAL"
+]
+
+
 
 # JSON etiketlerini yükle
 def load_annotations(json_path):
@@ -45,82 +61,90 @@ def game_time_to_frame(gameTime: str, frame_rate: int = 25) -> int:
 # print(f"GameTime '{game_time}' corresponds to frame: {current_frame}")
 
 #%%
-def process_video(video_path, annotations, target_labels, total_frames=50000, frame_rate=25):
+
+
+def process_and_save_video(video_name, annotations, Tlabels, frame_rate=25, time_steps=20, save_path="sequences/"):
+    video_path = f"{Train_video_path}{video_name}/224p.mp4"
     cap = cv2.VideoCapture(video_path)
-    frames = []
-    labels = []
-    current_frame = 0
-    video_length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))  # Video uzunluğu (toplam frame sayısı)
-    
-    # Önemli etiketlerin gameTime bilgilerini topla
-    selected_frame_times = []
 
-    # Etiketlerin bulunduğu zaman dilimlerini seçme
-    for ann in annotations:
-        if ann.label  in target_labels:
-            time = game_time_to_frame(ann.gameTime, frame_rate)
-            selected_frame_times.append(time)
+    if not cap.isOpened():
+        print(f"Error: Could not open video {video_path}")
+        return
 
-    # Seçilen frame'lerin sayısını sınırlama
-    #selected_frame_times = random.sample(selected_frame_times, min(len(selected_frame_times), total_frames))
-    
-    # Video karelerini ve etiketlerini işle
-    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Videoyu baştan başlat
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))  # Toplam kare sayısı
 
-        # Eğer bu frame seçilmişse, kareyi ve etiketini kaydet
-        if current_frame in selected_frame_times:
-            frames.append(cv2.resize(frame, (224, 224)))  # 224x224 boyut
-            # Olay var mı kontrol et
-            for ann in annotations:
-                time = game_time_to_frame(ann.gameTime, frame_rate)
-                if current_frame == time:  # Zaman eşleştirme
-                    labels.append(ann.label)
-                    break
+    # Etiketleri önceden haritala
+    label_map = {game_time_to_frame(ann.gameTime, frame_rate): ann.label
+                 for ann in annotations if ann.label in Tlabels}
+
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)  # Kaydedilecek dizin yoksa oluştur
+
+    # Pencereli okuma (Sliding Window)
+    for start_frame in range(0, frame_count - time_steps, time_steps):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)  # Gereksiz kareleri atla
         
-        current_frame += 1
-        if current_frame >= video_length:
-            break
+        frames = []
+        for _ in range(time_steps):
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frame = cv2.resize(frame, (224, 224))  # Boyutu küçülterek bellek yükünü azalt
+            frames.append(frame)
+
+        if len(frames) < time_steps:
+            break  # Yetersiz frame varsa pencereyi atla
+
+        # Sekansı etiketleme (önemli etiketlere bakarak)
+        for idx in range(start_frame, start_frame + time_steps):
+            if idx in label_map:
+                event_label = label_map[idx]
+                break
+        else:
+            event_label = "NONE"  # Etiket bulunmazsa NONE
+
+        # Sekansı kaydet
+        file_name = f"{save_path}{video_name}_sec_{start_frame}_{event_label}.npy"
+        np.save(file_name, np.array(frames))  # Sekansı numpy formatında kaydet
 
     cap.release()
-    
-    return np.array(frames), np.array(labels)
 
 
 
-#%%
-# Veri yükleme ve model eğitimi
-Train_video_path = "/Users/ayten/Documents/SoccerNet/spotting-ball-2024/train//england_efl/2019-2020/"
-videos=["2019-10-01 - Blackburn Rovers - Nottingham Forest" ,
-        "2019-10-01 - Brentford - Bristol City",
-        "2019-10-01 - Hull City - Sheffield Wednesday",
-        "2019-10-01 - Leeds United - West Bromwich",
-        "2019-10-01 - Middlesbrough - Preston North End",
-        "2019-10-01 - Reading - Fulham",
-        "2019-10-01 - Stoke City - Huddersfield Town"]
+
+
+
+
+
+
 
 #%%
-Tlabels = [
-    "PASS", "DRIVE", "HEADER", "HIGH PASS", "OUT", "CROSS", 
-    "THROW IN", "SHOT", "BALL PLAYER BLOCK", "PLAYER SUCCESSFUL TACKLE", 
-    "FREE KICK", "GOAL"
-]
+X = []
+y = []
 
-X= np.empty((0, 224, 224, 3))
-y = np.array([], dtype=str)
+time_steps = 30  # LSTM'nin kullanacağı zaman aralığı
 
 for name in videos:
-    lab=load_annotations(Train_video_path+name+"/Labels-ball.json")
+    lab = load_annotations(f"{Train_video_path}{name}/Labels-ball.json")  # Anotasyonları yükle
     
-    fr,lb=process_video(Train_video_path+name+"/224p.mp4", lab.annotations,Tlabels)
-    y = np.concatenate((y, lb), axis=0)
-    X = np.concatenate((X, fr), axis=0)
+    fr, lb = process_and_save_video(name, lab.annotations, Tlabels)  
+
+    # Frameleri time_steps boyutunda bölüyoruz
+    for i in range(0, len(fr) - time_steps, time_steps):
+        X.append(fr[i : i + time_steps])  
+        y.append(lb[i + time_steps - 1])  # Son frame'in etiketini alıyoruz
+
+X = np.array(X)  # (num_samples, time_steps, 224, 224, 3)
+y = np.array(y)  # (num_samples, )
+
+print("X shape:", X.shape)  # (örneğin) (1000, 30, 224, 224, 3)
+print("y shape:", y.shape)  # (örneğin) (1000,)
+
 #%%
 
 
+def load_sequence(file_path):
+    return np.load(file_path)  # NumPy dizisini yükle
 #%%
 # Benzersiz değerler ve frekanslar
 unique_values, counts = np.unique(y, return_counts=True)
@@ -142,18 +166,37 @@ plt.grid(axis='y', linestyle='--', alpha=0.7)
 plt.tight_layout()
 plt.show()
 
+
+# #%%
+# from imblearn.under_sampling import RandomUnderSampler
+
+# rus = RandomUnderSampler(random_state=42)
+# X_resampled, y_resampled = rus.fit_resample(X.reshape(X.shape[0], -1), y)
+
+# X = X_resampled.reshape(-1, 224, 224, 3)  # Orijinal şekle geri çevir
+# y = y_resampled
 #%%
+from tensorflow.keras.utils import to_categorical
 from sklearn.preprocessing import LabelEncoder
-le = LabelEncoder()
-y = le.fit_transform(y)
+
+# Etiketleri sayısal değere çevirme
+encoder = LabelEncoder()
+y_encoded = encoder.fit_transform(y)  # Kategorik stringleri sayıya çevir
+y_one_hot = to_categorical(y_encoded, num_classes=len(Tlabels))  # One-hot formata çevir
+
+# Verileri uygun formata getir
+X = X.astype('float32') / 255.0  # Normalizasyon
+#%%
+
+#%%
 
 
 #%%
 # Verileri önce eğitim ve test olarak ayır
-X_train, X_test, y_train, y_test = train_test_split(X / 255, y, test_size=0.2, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y_one_hot, test_size=0.2, random_state=42)
 
 # Eğitim setini doğrulama setine de böl
-X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
+X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.5, random_state=42)
 
 # Şekilleri kontrol et
 X_train.shape, y_train.shape, X_val.shape, y_val.shape, X_test.shape, y_test.shape
@@ -187,29 +230,55 @@ plt.tight_layout()
 plt.show()
 
 
+
 #%%
 
+
+import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.applications import VGG16
-from tensorflow.keras.layers import GlobalAveragePooling2D
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, LSTM, Dense, TimeDistributed, Dropout
 
-# VGG16 modelini önceden eğitilmiş ağırlıklarla yükleyin
-base_model = VGG16(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+# Model için giriş boyutu (frame yüksekliği, genişliği, kanal sayısı)
+frame_height = 224
+frame_width = 224
+channels = 3
+timesteps = 30  # LSTM'in işleyeceği zaman adımları
+num_classes = 12  # Olay sınıfı sayısı (Örn: Gol, Faul, Korner, Ofsayt, Normal)
 
-model = Sequential()
-model.add(base_model)
+# CNN-LSTM modeli oluşturma
+model = Sequential([
+    # CNN Katmanları (Özellik Çıkarımı)
+    TimeDistributed(Conv2D(64, (3, 3), activation='relu', padding='same'), 
+                    input_shape=(timesteps, frame_height, frame_width, channels)),
+    TimeDistributed(MaxPooling2D(pool_size=(2, 2))),
+    
+    TimeDistributed(Conv2D(64, (3, 3), activation='relu', padding='same')),
+    TimeDistributed(MaxPooling2D(pool_size=(2, 2))),
+    
+    TimeDistributed(Conv2D(128, (3, 3), activation='relu', padding='same')),
+    TimeDistributed(MaxPooling2D(pool_size=(2, 2))),
 
-# Katmanları dondurun (transfer learning)
-base_model.trainable = False
+    TimeDistributed(Flatten()),  # CNN çıktısını LSTM'e vermek için düzleştirme
 
-model.add(GlobalAveragePooling2D())
-model.add(Dense(256, activation='relu'))
-model.add(Dropout(0.5))
-model.add(Dense(12, activation='softmax'))
+    # LSTM Katmanları (Zaman Serisi Analizi)
+    LSTM(128, return_sequences=True),
+    LSTM(64, return_sequences=False),  
 
-model.compile(optimizer=Adam(), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    # Tam Bağlantılı Katman (Çıktı)
+    Dense(128, activation='relu'),
+    Dropout(0.5),  # Overfitting önlemek için
+    Dense(num_classes, activation='softmax')  # Çok sınıflı tahmin için softmax
+])
+
+# Modeli derleme
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Model özetini görüntüleme
+model.summary()
+
+
+
+
 
 
 
@@ -230,8 +299,10 @@ lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, ver
 
 
 early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+batch = 1  # Her batch 1 maç içerecek
+history = model.fit(X_train, y_train, epochs=10, batch_size=batch, validation_data=(X_val, y_val), callbacks=[early_stopping,lr_scheduler])
 
-history = model.fit(X_train, y_train, epochs=12, batch_size=32, validation_data=(X_val, y_val), callbacks=[early_stopping,lr_scheduler])
+
 
 
 #%%
