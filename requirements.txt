@@ -1,0 +1,1 @@
+numpypandasmatplotlibopencv-pythontensorflow-macos  # M3 için Metal backend destekli TensorFlowtensorflow-metal  # GPU hızlandırması için Metal desteğiscikit-learnscipy
