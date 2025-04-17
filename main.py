@@ -13,6 +13,9 @@ import matplotlib.pyplot as plt
 from dataModel import Train_video_path ,videos
 import utils_func
 from deepModel import createDeep
+
+from sklearn.utils.class_weight import compute_class_weight
+from sklearn.metrics import precision_score,recall_score
 #%%
 # class DataGenerator(Sequence):
 #     def __init__(self, video_list, batch_size, timesteps, frame_height, frame_width, channels, num_classes):
@@ -71,11 +74,13 @@ for video in videos:
     
     if X_train is None:
         continue
-
+    # Sınıf ağırlıklarını hesaplama
+    class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(y_train.argmax(axis=1)), y=y_train.argmax(axis=1))
+    class_weight_dict={i: class_weights[i] for i in range(len(class_weights))}
      # Artımlı eğitim: Her video için belirli sayıda epoch
-    history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=5, batch_size=16,callbacks=[csv_logger])
-
-    # Global history sözlüğünü güncelle
+    history=model.fit(X_train, y_train, epochs=4, batch_size=8, validation_data=(X_val, y_val), class_weight=class_weight_dict,callbacks=[csv_logger])
+    
+    # Global history sözlüğünü güncelle 
     for key in global_history.keys():
         global_history[key].extend(history.history[key])
     # Global test verisini birleştir
@@ -94,7 +99,30 @@ model.save("cnn_lstm_model.h5")
 test_loss, test_acc = model.evaluate(X_test, y_test)
 print(f"\n🎯 Global Test Doğruluğu: {test_acc:.2%}")
   
+# %%
 
+# Model tahmini ve metrik hesaplamaları
+y_pred = model.predict(X_train)
+y_pred_classes = np.argmax(y_pred, axis=-1)
+y_true_classes = np.argmax(y_train, axis=-1)
+
+# Frame-wise Accuracy Hesaplama
+frame_accuracy = np.mean(y_pred_classes == y_true_classes)
+print(f"Frame-wise Accuracy: {frame_accuracy:.2f}")
+
+# IoU (Intersection over Union) Hesaplama
+def calculate_iou(true_labels, pred_labels):
+    intersection = np.logical_and(true_labels, pred_labels).sum()
+    union = np.logical_or(true_labels, pred_labels).sum()
+    return intersection / union if union > 0 else 0
+
+iou_score = calculate_iou(y_true_classes.flatten(), y_pred_classes.flatten())
+print(f"IoU Score: {iou_score:.2f}")
+
+# Event-wise Precision ve Recall Hesaplama
+precision = precision_score(y_true_classes.flatten(), y_pred_classes.flatten(), average='macro')
+recall = recall_score(y_true_classes.flatten(), y_pred_classes.flatten(), average='macro')
+print(f"Event-wise Precision: {precision:.2f}, Recall: {recall:.2f}")
 #%%
 # Grafik çizme fonksiyonu
 def plot_training_history(history):

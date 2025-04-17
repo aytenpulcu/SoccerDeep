@@ -49,8 +49,8 @@ Labels = [
 Train_video_path = "/Users/ayten/Documents/SoccerNet/spotting-ball-2024/train/england_efl/2019-2020/"
 videos=["2019-10-01 - Blackburn Rovers - Nottingham Forest" ,
         "2019-10-01 - Brentford - Bristol City",
-        "2019-10-01 - Hull City - Sheffield Wednesday"]
-        # "2019-10-01 - Leeds United - West Bromwich",
-        # "2019-10-01 - Middlesbrough - Preston North End",
-        # "2019-10-01 - Reading - Fulham",
-        # "2019-10-01 - Stoke City - Huddersfield Town"]
+        "2019-10-01 - Hull City - Sheffield Wednesday",
+        "2019-10-01 - Leeds United - West Bromwich",
+        "2019-10-01 - Middlesbrough - Preston North End",
+        "2019-10-01 - Reading - Fulham",
+        "2019-10-01 - Stoke City - Huddersfield Town"]
