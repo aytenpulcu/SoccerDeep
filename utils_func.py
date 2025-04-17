@@ -8,7 +8,7 @@ Created on Thu Feb 20 15:13:39 2025
 import json
 import cv2
 from collections import defaultdict
-from dataModel import Root,Train_video_path 
+from dataModel import Root,Train_video_path ,Labels
 
 import numpy as np
 from tensorflow.keras.utils import to_categorical
@@ -48,11 +48,11 @@ def game_time_to_frame(gameTime: str, frame_rate: int = 25) -> int:
 # print(f"GameTime '{game_time}' corresponds to frame: {current_frame}")
 
 
-def video_sequences( video_name, img_size=(224, 224), num_classes=12):
+def video_sequences(video_name, img_size=(224, 224), selected_labels=Labels):
     """ Belirtilen etiketlere göre CNN-LSTM için uygun X ve y değerlerini döndürür """
 
     # JSON dosyasını oku
-    with open(Train_video_path+video_name+"/Labels-ball.json", "r", encoding="utf-8") as f:
+    with open(Train_video_path + video_name + "/Labels-ball.json", "r", encoding="utf-8") as f:
         data = json.load(f)
         
     video_path = f"{Train_video_path}{video_name}/224p.mp4"
@@ -72,47 +72,48 @@ def video_sequences( video_name, img_size=(224, 224), num_classes=12):
     for annotation in data["annotations"]:
         label = annotation["label"]
 
-        # Eğer bu etiketten 100'den az varsa listeye ekle
-        if len(label_list[label]) < 100:
-            current_frame = game_time_to_frame(annotation['gameTime'], frame_rate)
-            if current_frame == -1:
-                continue  
+        # Seçilen etiketlere bak, varsa işle
+        if label in selected_labels:
+            if len(label_list[label]) < 100:
+                current_frame = game_time_to_frame(annotation['gameTime'], frame_rate)
+                if current_frame == -1:
+                    continue  
 
-            # 1 saniye öncesi ve sonrası için frame hesapla
-            start_frame = max(0, current_frame - frame_rate)  
-            middle_frame = current_frame  
-            end_frame = current_frame + frame_rate  
-            frames_to_capture = [start_frame, middle_frame, end_frame]
+                # 1 saniye öncesi ve sonrası için frame hesapla
+                start_frame = max(0, current_frame - frame_rate)  
+                middle_frame = current_frame  
+                end_frame = current_frame + frame_rate  
+                frames_to_capture = [start_frame, middle_frame, end_frame]
 
-            frames = []
-            for frame_no in frames_to_capture:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
-                ret, frame = cap.read()
-                if ret:
-                    # **Resmi yeniden boyutlandır ve normalize et**
-                    frame = cv2.resize(frame, img_size)  
-                    frame = frame / 255.0  
-                    frames.append(frame)
+                frames = []
+                for frame_no in frames_to_capture:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
+                    ret, frame = cap.read()
+                    if ret:
+                        # **Resmi yeniden boyutlandır ve normalize et**
+                        frame = cv2.resize(frame, img_size)  
+                        frame = frame / 255.0  
+                        frames.append(frame)
 
-            if len(frames) == 3:  # 3'lü sekans tamamlandıysa ekle
-                X_data.append(np.array(frames))  
-                y_data.append(label)
-                label_list[label].append(frames)  
+                if len(frames) == 3:  # 3'lü sekans tamamlandıysa ekle
+                    X_data.append(np.array(frames))  
+                    y_data.append(label)
+                    label_list[label].append(frames)  
 
     cap.release()
 
     # **Etiketleri Encode et**
     le = LabelEncoder()
     y_data = le.fit_transform(y_data)  
-    y_data = to_categorical(y_data, num_classes=num_classes)  
+    y_data = to_categorical(y_data, num_classes=len(selected_labels))  # Seçilen etiket sayısına göre sınıflandırma
 
     # **CNN-LSTM için uygun formatta array'e çevir**
     X_data = np.array(X_data)  # (num_samples, timesteps=3, height, width, channels)
     y_data = np.array(y_data)
 
     print("Hazırlanan veri şekli:", X_data.shape, y_data.shape)
-    val_split=0.15
-    test_split=0.15
+    val_split = 0.15
+    test_split = 0.15
     # Veriyi %70 train, %15 validation, %15 test olarak böl
     X_train, X_temp, y_train, y_temp = train_test_split(X_data, y_data, test_size=(val_split + test_split), random_state=42)
     relative_test = test_split / (val_split + test_split)
@@ -120,8 +121,7 @@ def video_sequences( video_name, img_size=(224, 224), num_classes=12):
 
     print(f"Eğitim: {X_train.shape}, Validasyon: {X_val.shape}, Test: {X_test.shape}")
     return X_train, y_train, X_val, y_val, X_test, y_test
-
-    
+  
     
     
    

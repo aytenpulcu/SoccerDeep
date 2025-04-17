@@ -38,19 +38,19 @@ class Root:
         return Root(_UrlLocal, _UrlYoutube, _annotations)
 # Ana sınıflar
 Labels = [
-    "PASS", "DRIVE", "HEADER",
-    "HIGH PASS", "OUT", "CROSS", 
-    "THROW IN", "SHOT", "BALL PLAYER BLOCK", 
-    "PLAYER SUCCESSFUL TACKLE", 
-    "FREE KICK", "GOAL", "NO_ACTION"
+  "PASS", "GOAL", "SHOT", "HIGH PASS", "CROSS","NO_ACTION", "FREE KICK"
 ]
-
+# =============================================================================
+# 
+# "DRIVE", "HEADER", "OUT", "THROW IN"
+#"BALL PLAYER BLOCK", "PLAYER SUCCESSFUL TACKLE"
+# =============================================================================
 # Veri yükleme ve model eğitimi
-Train_video_path = "/Users/ayten/Documents/SoccerNet/spotting-ball-2024/train/england_efl/2019-2020/"
+Train_video_path = "C:/Users/ayten/Documents/SoccerNet/spotting-ball-2024/train/" #"/Users/ayten/Documents/SoccerNet/spotting-ball-2024/train/england_efl/2019-2020/"
 videos=["2019-10-01 - Blackburn Rovers - Nottingham Forest" ,
-        "2019-10-01 - Brentford - Bristol City",
-        "2019-10-01 - Hull City - Sheffield Wednesday"]
-        # "2019-10-01 - Leeds United - West Bromwich",
+        "2019-10-01 - Brentford - Bristol City"]
+        # "2019-10-01 - Hull City - Sheffield Wednesday",
+        #  "2019-10-01 - Leeds United - West Bromwich"
         # "2019-10-01 - Middlesbrough - Preston North End",
         # "2019-10-01 - Reading - Fulham",
         # "2019-10-01 - Stoke City - Huddersfield Town"]

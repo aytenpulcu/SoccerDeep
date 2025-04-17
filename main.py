@@ -10,9 +10,11 @@ from tensorflow.keras.utils import Sequence
 import numpy as np
 import matplotlib.pyplot as plt
 
-from dataModel import Train_video_path ,videos
+from dataModel import Train_video_path ,videos,Labels
 import utils_func
-from deepModel import createDeep
+from deepModel import create3DCNN_BiLSTM
+from sklearn.utils.class_weight import compute_class_weight
+from sklearn.metrics import precision_score,recall_score
 #%%
 # class DataGenerator(Sequence):
 #     def __init__(self, video_list, batch_size, timesteps, frame_height, frame_width, channels, num_classes):
@@ -45,14 +47,28 @@ from deepModel import createDeep
 #         return X_batch, y_batch
 #%%
 # Modeli oluşturulur
+# Modeli oluştur
 
-model=createDeep(frame_height=224, frame_width=224, channels=3, timesteps=30, num_classes=12)
+timesteps=30 
+num_classes=len(Labels)
+frame_height=224 
+frame_width=224
+channels=3
+model = create3DCNN_BiLSTM(timesteps, frame_height, frame_width, channels, num_classes)
+
+# =============================================================================
+
+# #kayıtlı modeli tekrar eğit
+# from tensorflow.keras.models import load_model
+# from tensorflow.keras.preprocessing.image import ImageDataGenerator
+# from tensorflow.keras.optimizers import Adam
+# model = load_model('cnn_lstm_model.h5')
+# =============================================================================
+
 #%%
 
 
-# Global test verilerini saklamak için listeler
-X_test_global = []
-y_test_global = []
+
 # Global history sözlüğünü başlat
 global_history = {
     'loss': [],
@@ -60,30 +76,48 @@ global_history = {
     'val_loss': [],
     'val_accuracy': []
 }
-from tensorflow.keras.callbacks import CSVLogger
+from tensorflow.keras.callbacks import CSVLogger,EarlyStopping
 
 csv_logger = CSVLogger('training_log.csv', append=True)
 
-# Her video için artımlı eğitim
+#  CSV Logger ve EarlyStopping tanımla
+csv_logger = CSVLogger('training_log.csv', append=True)
+early_stop = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
+
+
+#  Her video için artımlı eğitim
 for video in videos:
-    print(f"\n📌 {video} üzerinde artımlı eğitim başlıyor...")
-    X_train, y_train, X_val, y_val, X_test, y_test = utils_func.video_sequences( video)
-    
+    print(f"\n🎬 {video} için artımlı eğitim başlıyor...")
+
+    # Verileri yükle
+    X_train, y_train, X_val, y_val, X_test, y_test = utils_func.video_sequences(video)
     if X_train is None:
         continue
+    # Sınıf ağırlıklarını hesaplama
+    class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(y_train.argmax(axis=1)), y=y_train.argmax(axis=1))
+    class_weight_dict={i: class_weights[i] for i in range(len(class_weights))}
+    # Modeli eğit
+    history = model.fit(
+        X_train, y_train,
+        validation_data=(X_val, y_val),
+        epochs=7,  # her video için epoch
+        batch_size=8,
+        class_weight=class_weight_dict,
+        callbacks=[csv_logger, early_stop],
+        verbose=1
+    )
 
-     # Artımlı eğitim: Her video için belirli sayıda epoch
-    history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=5, batch_size=16,callbacks=[csv_logger])
-
-    # Global history sözlüğünü güncelle
+    # Global metrik geçmişini kaydet (isteğe bağlı)
     for key in global_history.keys():
-        global_history[key].extend(history.history[key])
-    # Global test verisini birleştir
-    if X_test_global and y_test_global:
-        X_test_global = np.concatenate(X_test, axis=0)
-        y_test_global = np.concatenate(y_test, axis=0)
+        global_history[key].extend(history.history.get(key, []))
+    
+    # Global değişkenleri kontrol et ve başlat
+    if 'X_test_global' not in globals():
+        X_test_global, y_test_global = X_test, y_test
+    else:
+        X_test_global = np.concatenate((X_test_global, X_test), axis=0)
+        y_test_global = np.concatenate((y_test_global, y_test), axis=0)
 
-        
 
 # Modeli kaydet
 model.save("cnn_lstm_model.h5")
@@ -95,6 +129,28 @@ test_loss, test_acc = model.evaluate(X_test, y_test)
 print(f"\n🎯 Global Test Doğruluğu: {test_acc:.2%}")
   
 
+#%%# Model tahmini ve metrik hesaplamaları
+y_pred = model.predict(X_train)
+y_pred_classes = np.argmax(y_pred, axis=-1)
+y_true_classes = np.argmax(y_train, axis=-1)
+
+# Frame-wise Accuracy Hesaplama
+frame_accuracy = np.mean(y_pred_classes == y_true_classes)
+print(f"Frame-wise Accuracy: {frame_accuracy:.2f}")
+
+# IoU (Intersection over Union) Hesaplama
+def calculate_iou(true_labels, pred_labels):
+    intersection = np.logical_and(true_labels, pred_labels).sum()
+    union = np.logical_or(true_labels, pred_labels).sum()
+    return intersection / union if union > 0 else 0
+
+iou_score = calculate_iou(y_true_classes.flatten(), y_pred_classes.flatten())
+print(f"IoU Score: {iou_score:.2f}")
+
+# Event-wise Precision ve Recall Hesaplama
+precision = precision_score(y_true_classes.flatten(), y_pred_classes.flatten(), average='macro')
+recall = recall_score(y_true_classes.flatten(), y_pred_classes.flatten(), average='macro')
+print(f"Event-wise Precision: {precision:.2f}, Recall: {recall:.2f}")
 #%%
 # Grafik çizme fonksiyonu
 def plot_training_history(history):
