@@ -1,1 +1,11 @@
-numpypandasmatplotlibopencv-pythontensorflow-macos  # M3 için Metal backend destekli TensorFlowtensorflow-metal  # GPU hızlandırması için Metal desteğiscikit-learnscipy
+SoccerNet==0.1.61
+scipy==1.10.1
+tensorflow>=2.8.0
+keras==3.7.0
+numpy>=1.21.0
+pandas>=1.3.0
+matplotlib>=3.4.0
+scikit-learn>=0.24.0
+typing_extensions==4.13.0
+opencv-python==4.10.0.84
+seaborn>=0.13.2

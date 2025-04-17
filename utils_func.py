@@ -47,6 +47,9 @@ def game_time_to_frame(gameTime: str, frame_rate: int = 25) -> int:
 # current_frame = game_time_to_frame(game_time, frame_rate=25)
 # print(f"GameTime '{game_time}' corresponds to frame: {current_frame}")
 
+# Tüm frame'ler için yalnızca bir kez yapılmalı:
+le = LabelEncoder()
+le.fit(Labels)  # Tüm videolardaki etiketler bir arada
 
 def video_sequences(video_name, img_size=(224, 224), selected_labels=Labels):
     """ Belirtilen etiketlere göre CNN-LSTM için uygun X ve y değerlerini döndürür """
@@ -103,7 +106,6 @@ def video_sequences(video_name, img_size=(224, 224), selected_labels=Labels):
     cap.release()
 
     # **Etiketleri Encode et**
-    le = LabelEncoder()
     y_data = le.fit_transform(y_data)  
     y_data = to_categorical(y_data, num_classes=len(selected_labels))  # Seçilen etiket sayısına göre sınıflandırma
 

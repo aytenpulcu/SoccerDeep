@@ -15,36 +15,7 @@ import utils_func
 from deepModel import create3DCNN_BiLSTM
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.metrics import precision_score,recall_score
-#%%
-# class DataGenerator(Sequence):
-#     def __init__(self, video_list, batch_size, timesteps, frame_height, frame_width, channels, num_classes):
-#         self.video_list = video_list
-#         self.batch_size = batch_size
-#         self.timesteps = timesteps
-#         self.frame_height = frame_height
-#         self.frame_width = frame_width
-#         self.channels = channels
-#         self.num_classes = num_classes
 
-#     def __len__(self):
-#         return int(np.floor(len(self.video_list) / self.batch_size))
-
-#     def __getitem__(self, index):
-#         batch_videos = self.video_list[index * self.batch_size:(index + 1) * self.batch_size]
-#         X, y = self.__data_generation(batch_videos)
-#         return X, y
-
-#     def __data_generation(self, batch_videos):
-#         X_batch, y_batch = [], []
-#         for video in batch_videos:
-#             X, y = utils_func.video_sequences( video)  # Video'yu işle
-#             X_batch.append(X)
-#             y_batch.append(y)
-
-#         X_batch = np.array(X_batch)
-#         y_batch = np.array(y_batch)
-
-#         return X_batch, y_batch
 #%%
 # Modeli oluşturulur
 # Modeli oluştur
@@ -118,7 +89,7 @@ for video in videos:
         X_test_global = np.concatenate((X_test_global, X_test), axis=0)
         y_test_global = np.concatenate((y_test_global, y_test), axis=0)
 
-
+#%%
 # Modeli kaydet
 model.save("cnn_lstm_model.h5")
 
@@ -134,6 +105,9 @@ y_pred = model.predict(X_train)
 y_pred_classes = np.argmax(y_pred, axis=-1)
 y_true_classes = np.argmax(y_train, axis=-1)
 
+# encode değerleri Geri dönüştür 
+y_pred_labels = utils_func.le.inverse_transform(y_pred_classes)
+y_true_labels = utils_func.le.inverse_transform(y_true_classes)
 # Frame-wise Accuracy Hesaplama
 frame_accuracy = np.mean(y_pred_classes == y_true_classes)
 print(f"Frame-wise Accuracy: {frame_accuracy:.2f}")
@@ -182,28 +156,32 @@ plot_training_history(history)
 
 #%%
 
+#%%
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
+import matplotlib.pyplot as plt
 
-# Global test verisi (X_test_global, y_test_global) modelin daha önce toplandığını varsayıyoruz.
-# Modelin global test verisi üzerindeki performansını ölçelim:
-test_loss, test_acc = model.evaluate(X_test, y_test)
-print(f"\nTest Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.2%}")
-
-# Tahminleri al
+# Test verisinden tahmin al
 y_pred_prob = model.predict(X_test)
 y_pred = np.argmax(y_pred_prob, axis=1)
 y_true = np.argmax(y_test, axis=1)
 
-# Confusion Matrix oluştur
+# Label adlarını çöz
+label_names = utils_func.le.classes_  # LabelEncoder üzerinden sınıf adları
+
+# Confusion Matrix oluştur ve çiz
 cm = confusion_matrix(y_true, y_pred)
-plt.figure(figsize=(8,6))
-sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+plt.figure(figsize=(10, 8))
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", 
+            xticklabels=label_names, yticklabels=label_names)
 plt.xlabel("Tahmin Edilen Sınıf")
 plt.ylabel("Gerçek Sınıf")
 plt.title("Confusion Matrix")
+plt.xticks(rotation=45)
+plt.yticks(rotation=45)
+plt.tight_layout()
 plt.show()
 
 # Classification Report
-report = classification_report(y_true, y_pred)
+report = classification_report(y_true, y_pred, target_names=label_names)
 print("Classification Report:\n", report)
